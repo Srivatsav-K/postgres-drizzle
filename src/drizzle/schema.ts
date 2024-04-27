@@ -1,3 +1,4 @@
+import { relations } from "drizzle-orm";
 import {
   unique,
   pgTable,
@@ -40,6 +41,7 @@ export const UserTable = pgTable(
   }
 );
 
+// one to one mapping (one user has one preference)
 export const UserPreferencesTable = pgTable("userPreferences", {
   id: uuid("id").primaryKey().defaultRandom(),
   emailUpdates: boolean("emailUpdates").notNull().default(false),
@@ -50,6 +52,7 @@ export const UserPreferencesTable = pgTable("userPreferences", {
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
+// one to many mapping (one user can have multiple posts)
 export const PostTable = pgTable("posts", {
   id: uuid("id").primaryKey().defaultRandom(),
   title: varchar("title", { length: 255 }).notNull(),
@@ -66,6 +69,7 @@ export const CategoryTable = pgTable("categories", {
   name: varchar("name", { length: 255 }).notNull(),
 });
 
+// many to many mapping each post can have multiple categories and each category can have multiple posts
 // Join table
 // id is not requried here as a combination of postId and categoryId can act as an id
 // We can use : composite primary key (primary key that uses multiple columns)
@@ -85,3 +89,52 @@ export const PostCategory = pgTable(
     };
   }
 );
+
+// DRIZZLE RELATIONS (Map relations for drizzle so that it can be used in db.query with clause)
+export const UserTableRelations = relations(UserTable, ({ one, many }) => {
+  return {
+    preferences: one(UserPreferencesTable), // user table has one user preference from userPreferences table
+    posts: many(PostTable),
+  };
+});
+
+export const UserPreferencesTableRelations = relations(
+  UserPreferencesTable,
+  ({ one }) => {
+    return {
+      user: one(UserTable, {
+        fields: [UserPreferencesTable.userId], // foreign key
+        references: [UserTable.id], // what it references
+      }), // When we are doing one to one mapping the table that has the id(foreign key), we also need to pass a second argument
+    };
+  }
+);
+
+export const PostTableRelations = relations(PostTable, ({ one, many }) => {
+  return {
+    author: one(UserTable, {
+      fields: [PostTable.authorId], // foreign key
+      references: [UserTable.id], // what it references
+    }), // When we are doing one to many mapping the table that has the id(foreign key), we also need to pass a second argument
+    postCategories: many(PostCategory), // No need to pas second arg for many to many relations
+  };
+});
+
+export const CategoryTableRelations = relations(CategoryTable, ({ many }) => {
+  return {
+    postCategory: many(PostCategory),
+  };
+});
+
+export const PostCategoryTableRelations = relations(PostCategory, ({ one }) => {
+  return {
+    post: one(PostTable, {
+      fields: [PostCategory.postId],
+      references: [PostTable.id],
+    }),
+    category: one(CategoryTable, {
+      fields: [PostCategory.categoryId],
+      references: [CategoryTable.id],
+    }),
+  };
+});

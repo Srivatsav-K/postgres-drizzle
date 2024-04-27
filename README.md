@@ -57,7 +57,7 @@
 - Run `pnpm run db:generate-migration`
 - Migrations are created under `./src/drizzle/migrations`
 
-## Apply migrations to db
+## Apply migrations to db (sync with db)
 
 - Create a `migrate.ts` file under `/src/drizzle/migrate.ts`
 
@@ -113,3 +113,62 @@
   ```
 
 - Export and use this `db` for queries across the app.
+
+## Selecting data with relationships using `db.query`
+
+- If we want to fetch data along with it's relationships while using drizzle's `db.query`(`db.query` is a higher level abstraction that drizzle offers for querying data)
+- for ex. fetch all users but populate userPreferences also for each user.
+- We already have these relations defined in our database (while creating tables using foreign keys). But drizzle's `db.query` doesn't know this. Hence we have define a drizzle level reference explicitly under `./src/drizzle/schema.ts`
+- We have to setup relations on both sides of the tables for ex. on users and userPreferences
+- No need to run a db migration as this is only used by drizzle that only when using `db.query`
+
+```ts
+// DRIZZLE RELATIONS (Map relations for drizzle so that it can be used in db.query with clause)
+export const UserTableRelations = relations(UserTable, ({ one, many }) => {
+  return {
+    preferences: one(UserPreferencesTable), // user table has one user preference from userPreferences table
+    posts: many(PostTable),
+  };
+});
+
+export const UserPreferencesTableRelations = relations(
+  UserPreferencesTable,
+  ({ one }) => {
+    return {
+      user: one(UserTable, {
+        fields: [UserPreferencesTable.userId], // foreign key
+        references: [UserTable.id], // what it references
+      }), // When we are doing one to one mapping the table that has the id(foreign key), we also need to pass a second argument
+    };
+  }
+);
+
+export const PostTableRelations = relations(PostTable, ({ one, many }) => {
+  return {
+    author: one(UserTable, {
+      fields: [PostTable.authorId], // foreign key
+      references: [UserTable.id], // what it references
+    }), // When we are doing one to many mapping the table that has the id(foreign key), we also need to pass a second argument
+    postCategories: many(PostCategory), // No need to pas second arg for many to many relations
+  };
+});
+
+export const CategoryTableRelations = relations(CategoryTable, ({ many }) => {
+  return {
+    postCategory: many(PostCategory),
+  };
+});
+
+export const PostCategoryTableRelations = relations(PostCategory, ({ one }) => {
+  return {
+    post: one(PostTable, {
+      fields: [PostCategory.postId],
+      references: [PostTable.id],
+    }),
+    category: one(CategoryTable, {
+      fields: [PostCategory.categoryId],
+      references: [CategoryTable.id],
+    }),
+  };
+});
+```
